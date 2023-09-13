@@ -114,9 +114,9 @@ def launch_setup(context, *args, **kwargs):
             " ",
             "output_recipe_filename:=rtde_output_recipe.txt",
             " ",
-            "prefix:=",
+            "tf_prefix:=",
             prefix,
-            " ",
+            "/ ",
         ]
     )
     robot_description = {"robot_description": robot_description_content}
@@ -137,7 +137,7 @@ def launch_setup(context, *args, **kwargs):
             " ",
             "prefix:=",
             prefix,
-            " ",
+            "/ ",
         ]
     )
     robot_description_semantic = {"robot_description_semantic": robot_description_semantic_content}
@@ -149,6 +149,10 @@ def launch_setup(context, *args, **kwargs):
     # robot_description_planning = {
     # "robot_description_planning": load_yaml_abs(str(joint_limit_params.perform(context)))
     # }
+    robot_description_kinematics = load_yaml("ur_moveit_config", "config/kinematics.yaml")
+    kinematics_config = robot_description_kinematics["/**"]["ros__parameters"]
+    kinematics_config["robot_description_kinematics"][prefix.perform(context) + "/ur_manipulator"] = kinematics_config["robot_description_kinematics"].pop("ur_manipulator")
+    robot_description_kinematics = kinematics_config
 
     # Planning Configuration
     ompl_planning_pipeline_config = {
@@ -163,6 +167,8 @@ def launch_setup(context, *args, **kwargs):
 
     # Trajectory Execution Configuration
     controllers_yaml = load_yaml("ur_moveit_config", "config/controllers.yaml")
+    controllers_yaml["joint_trajectory_controller"]["joints"] = [prefix.perform(context) + "/" + w for w in controllers_yaml["joint_trajectory_controller"]["joints"]]
+    print (controllers_yaml)
     # the scaled_joint_trajectory_controller does not work on fake hardware
     change_controllers = context.perform_substitution(use_fake_hardware)
     if change_controllers == "true":
@@ -193,15 +199,21 @@ def launch_setup(context, *args, **kwargs):
         "warehouse_host": warehouse_sqlite_path,
     }
 
+    move_group_capabilities = {
+        "capabilities": "move_group/ExecuteTaskSolutionCapability"
+    }
+
     # Start the actual move_group node/action server
     move_group_node = Node(
         package="moveit_ros_move_group",
         executable="move_group",
         output="screen",
+        namespace=prefix,
         parameters=[
             robot_description,
             robot_description_semantic,
             robot_description_kinematics,
+            move_group_capabilities,
             # robot_description_planning,
             ompl_planning_pipeline_config,
             trajectory_execution,
